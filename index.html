@@ -1,0 +1,1843 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>ระบบบริหารจัดการ ชงโคเกมส์ - วิทยาลัยเทคนิคพังงา</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <!-- SheetJS สำหรับอ่านไฟล์ Excel ทุกหน้า ทุกตาราง -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@300;400;500;600;700&family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --primary: #6d28d9;
+            --primary-light: #ede9fe;
+        }
+        body {
+            font-family: 'Sarabun', sans-serif;
+            background-color: #f4f5f9;
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(184, 51, 106, 0.08) 0px, transparent 50%),
+                radial-gradient(at 100% 0%, rgba(91, 75, 214, 0.08) 0px, transparent 50%);
+            color: #1e293b;
+        }
+        h1, h2, h3, h4, .font-heading { font-family: 'Kanit', sans-serif; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(226, 232, 240, 0.9);
+            box-shadow: 0 4px 20px -2px rgba(15, 23, 42, 0.05);
+        }
+        .btn-chongkho {
+            background: linear-gradient(135deg, #b8336a 0%, #6d28d9 100%);
+            color: white;
+            transition: all 0.2s ease;
+        }
+        .btn-chongkho:hover:not(:disabled) {
+            transform: translateY(-1px);
+            box-shadow: 0 8px 20px -4px rgba(184, 51, 106, 0.4);
+        }
+        .btn-chongkho:disabled { opacity: 0.6; cursor: not-allowed; }
+        .scrollbar-hide::-webkit-scrollbar { display: none; }
+        .animate-fade-in { animation: fadeIn 0.25s ease-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+
+        /* Badge สังกัดสี */
+        .badge-blue { background: #dbeafe; color: #1e40af; border: 1px solid #bfdbfe; }
+        .badge-green { background: #dcfce7; color: #166534; border: 1px solid #bbf7d0; }
+        .badge-purple { background: #f3e8ff; color: #6b21a8; border: 1px solid #e9d5ff; }
+        .badge-orange { background: #ffedd5; color: #9a3412; border: 1px solid #fed7aa; }
+        .badge-admin { background: #1e293b; color: #ffffff; border: 1px solid #0f172a; }
+
+        /* สไตล์สำหรับสร้าง PDF */
+        #pdf-container {
+            display: none;
+            font-family: 'Sarabun', sans-serif;
+            color: #000;
+            background: #fff;
+        }
+        .pdf-page {
+            page-break-after: always;
+            padding: 12mm 14mm;
+            background: white;
+            width: 210mm;
+            min-height: 285mm;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .pdf-page:last-child { page-break-after: auto; }
+        .pdf-header {
+            text-align: center;
+            margin-bottom: 12px;
+            border-bottom: 2px solid #1e293b;
+            padding-bottom: 8px;
+        }
+        .pdf-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 11.5px;
+            margin-bottom: 12px;
+        }
+        .pdf-table th, .pdf-table td {
+            border: 1px solid #334155;
+            padding: 5px 6px;
+        }
+        .pdf-table th {
+            background-color: #f1f5f9;
+            font-weight: 700;
+            text-align: center;
+        }
+        .pdf-size-box {
+            border: 1.5px solid #1e293b;
+            border-radius: 6px;
+            padding: 8px 10px;
+            background-color: #f8fafc;
+            font-size: 11.5px;
+        }
+    </style>
+</head>
+<body class="min-h-screen pb-20 text-sm">
+<div id="app">
+
+    <!-- ================= NAVBAR ================= -->
+    <nav v-if="token" class="bg-white/95 backdrop-blur-md sticky top-0 z-40 border-b border-slate-200 shadow-sm">
+        <div class="max-w-7xl mx-auto px-3 sm:px-6 py-3 flex justify-between items-center">
+            <div class="flex items-center gap-3">
+                <img src="png.png" onerror="this.style.display='none'" alt="Logo" class="h-9 sm:h-11 w-auto">
+                <div>
+                    <div class="flex items-center gap-2">
+                        <span class="font-heading font-bold text-base sm:text-xl text-slate-800">✿ ชงโคเกมส์</span>
+                        <span :class="getBadgeClass(user.role === 'admin' ? 'admin' : user.color)" class="px-2.5 py-0.5 rounded-full text-xs font-bold">
+                            {{ user.role === 'admin' ? 'ADMIN ส่วนกลาง' : getColorName(user.color) }}
+                        </span>
+                    </div>
+                    <p class="text-[11px] sm:text-xs text-slate-500">ระบบบริหารจัดการกีฬาสี • วิทยาลัยเทคนิคพังงา</p>
+                </div>
+            </div>
+
+            <div class="relative">
+                <button @click="showProfileMenu = !showProfileMenu" class="flex items-center gap-2 bg-slate-100 hover:bg-slate-200 p-1.5 pr-3 rounded-full border border-slate-200 transition">
+                    <img :src="'https://ui-avatars.com/api/?name=' + encodeURIComponent(user.full_name || user.username) + '&background=6d28d9&color=fff'" class="h-8 w-8 rounded-full object-cover">
+                    <div class="text-left hidden sm:block">
+                        <div class="text-xs font-bold text-slate-800 leading-tight">{{ user.full_name || user.username }}</div>
+                        <div class="text-[10px] text-slate-500">{{ getRoleName(user.role) }}</div>
+                    </div>
+                    <svg class="w-4 h-4 text-slate-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/></svg>
+                </button>
+
+                <div v-if="showProfileMenu" @click.away="showProfileMenu = false" class="absolute right-0 mt-2 w-60 bg-white rounded-2xl shadow-xl py-2 z-50 border border-slate-100 animate-fade-in">
+                    <div class="px-4 py-2.5 border-b border-slate-100 bg-slate-50/70">
+                        <p class="text-sm font-bold text-slate-800 truncate">{{ user.full_name || user.username }}</p>
+                        <p class="text-xs text-slate-500 mt-0.5">{{ getRoleName(user.role) }} • {{ getColorName(user.color) }}</p>
+                    </div>
+                    <button @click="openEditProfile" class="w-full text-left px-4 py-2.5 text-sm text-slate-700 hover:bg-purple-50 hover:text-purple-700 flex items-center gap-2 transition">
+                        <span>🔐</span> แก้ไขชื่อ / เปลี่ยนรหัสผ่าน
+                    </button>
+                    <button @click="confirmLogout" class="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 flex items-center gap-2 transition">
+                        <span>🚪</span> ออกจากระบบ
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <!-- ================= LOGIN / REGISTER ================= -->
+    <div v-if="!token" class="min-h-screen flex items-center justify-center p-4">
+        <div class="glass-card p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-xl border-t-8 border-t-[#b8336a]">
+            <div class="text-center mb-6">
+                <img src="png.png" onerror="this.style.display='none'" alt="Logo" class="h-16 w-auto mx-auto mb-2">
+                <span class="inline-block px-3 py-1 rounded-full bg-pink-50 text-pink-700 text-xs font-bold mb-1">✿ CHONGKHO GAMES</span>
+                <h1 class="text-2xl sm:text-3xl font-heading font-bold text-slate-800">ระบบจัดการชงโคเกมส์</h1>
+                <p class="text-slate-500 text-xs mt-1">วิทยาลัยเทคนิคพังงา • Phangnga Technical College</p>
+            </div>
+
+            <div class="flex bg-slate-100 p-1 rounded-xl mb-5">
+                <button type="button" @click="isLoginMode = true" :class="isLoginMode ? 'bg-white shadow text-purple-700 font-bold' : 'text-slate-500'" class="flex-1 py-2.5 rounded-lg text-xs transition">เข้าสู่ระบบ</button>
+                <button type="button" @click="isLoginMode = false" :class="!isLoginMode ? 'bg-white shadow text-purple-700 font-bold' : 'text-slate-500'" class="flex-1 py-2.5 rounded-lg text-xs transition">ลงทะเบียนคณะทำงาน</button>
+            </div>
+
+            <form @submit.prevent="authAction" class="space-y-3.5" autocomplete="off">
+                <div>
+                    <label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อผู้ใช้ (Username)</label>
+                    <input v-model.trim="authForm.username" type="text" placeholder="กรอก Username" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-300 text-sm" required>
+                </div>
+
+                <div>
+                    <label class="text-xs font-bold text-slate-600 mb-1 block">รหัสผ่าน (Password)</label>
+                    <div class="relative">
+                        <input v-model="authForm.password" :type="showPassword ? 'text' : 'password'" placeholder="กรอกรหัสผ่าน" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-300 text-sm pr-10" required>
+                        <button type="button" @click="showPassword = !showPassword" class="absolute right-3 top-3 text-slate-400 hover:text-purple-600">
+                            <span v-if="!showPassword">👁️</span><span v-else>🙈</span>
+                        </button>
+                    </div>
+                </div>
+
+                <div v-if="!isLoginMode" class="space-y-3.5 animate-fade-in pt-1">
+                    <div>
+                        <label class="text-xs font-bold text-slate-600 mb-1 block">ชื่อ-นามสกุลจริง</label>
+                        <input v-model.trim="authForm.full_name" type="text" placeholder="เช่น นายสมชาย ใจดี" class="w-full px-4 py-3 bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-purple-300 text-sm" required>
+                    </div>
+                    <div class="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 mb-1 block">ตำแหน่ง</label>
+                            <select v-model="authForm.role" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm" required>
+                                <option value="" disabled>เลือกตำแหน่ง</option>
+                                <option value="president">ประธานสี</option>
+                                <option value="vice">รองประธานสี</option>
+                                <option value="treasurer">เหรัญญิก</option>
+                                <option value="staff">Staff</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="text-xs font-bold text-slate-600 mb-1 block">สังกัดสี</label>
+                            <select v-model="authForm.color" class="w-full px-3 py-3 bg-white border border-slate-200 rounded-xl outline-none text-sm" required>
+                                <option value="" disabled>เลือกสี</option>
+                                <option value="blue">🟦 สีน้ำเงิน</option>
+                                <option value="green">🟩 สีเขียว</option>
+                                <option value="purple">🟪 สีม่วง</option>
+                                <option value="orange">🟧 สีแสด</option>
+                            </select>
+                        </div>
+                    </div>
+                    <p class="text-[11px] text-amber-700 bg-amber-50 border border-amber-200 p-2.5 rounded-xl">
+                        🛡️ บัญชีที่ลงทะเบียนใหม่จะต้องได้รับการอนุมัติจาก Admin ก่อนจึงจะเข้าสู่ระบบได้
+                    </p>
+                </div>
+
+                <button type="submit" class="w-full btn-chongkho font-heading font-bold py-3.5 rounded-xl shadow-md text-sm mt-2">
+                    {{ isLoginMode ? '🔐 เข้าสู่ระบบ' : '📝 ส่งคำขอลงทะเบียน' }}
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MAIN DASHBOARD ================= -->
+    <div v-else class="max-w-7xl mx-auto px-3 sm:px-6 pt-5">
+
+        <!-- แถบเลือกเมนูหลัก & ตัวกรองสีของ Admin -->
+        <div class="flex flex-col md:flex-row justify-between items-stretch md:items-center gap-3 mb-6 bg-white p-2.5 rounded-2xl shadow-sm border border-slate-200/80">
+            <div class="flex gap-1.5 overflow-x-auto scrollbar-hide">
+                <button @click="currentTab = 'members'" :class="currentTab === 'members' ? 'btn-chongkho shadow-sm' : 'text-slate-600 hover:bg-slate-100'" class="px-4 sm:px-6 py-2.5 rounded-xl font-heading font-semibold text-sm whitespace-nowrap transition flex-1 sm:flex-none">
+                    👕 รายชื่อและไซต์เสื้อ ({{ filteredMembers.length }})
+                </button>
+                <button v-if="canAccessBudget" @click="currentTab = 'budget'" :class="currentTab === 'budget' ? 'btn-chongkho shadow-sm' : 'text-slate-600 hover:bg-slate-100'" class="px-4 sm:px-6 py-2.5 rounded-xl font-heading font-semibold text-sm whitespace-nowrap transition flex-1 sm:flex-none">
+                    💰 งบประมาณสี
+                </button>
+                <button v-if="user.role === 'admin'" @click="loadUsers" :class="currentTab === 'users' ? 'btn-chongkho shadow-sm' : 'text-slate-600 hover:bg-slate-100'" class="px-4 sm:px-6 py-2.5 rounded-xl font-heading font-semibold text-sm whitespace-nowrap transition flex-1 sm:flex-none">
+                    👮 จัดการผู้ใช้ระบบ
+                </button>
+            </div>
+
+            <div v-if="user.role === 'admin' && currentTab !== 'users'" class="flex items-center gap-2 bg-slate-50 px-3 py-1.5 rounded-xl border border-slate-200">
+                <span class="text-xs font-bold text-slate-600 whitespace-nowrap">🎨 กรองสังกัดสี:</span>
+                <select v-model="adminFilterColor" class="bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 outline-none flex-1 md:flex-none">
+                    <option value="all">แสดงทุกสีทั้งหมด</option>
+                    <option value="blue">🟦 สีน้ำเงิน (ก่อสร้าง/การตลาด/DBT/IT)</option>
+                    <option value="green">🟩 สีเขียว (ช่างยนต์/การบัญชี)</option>
+                    <option value="purple">🟪 สีม่วง (ไมซ์/อาหาร/ท่องเที่ยว/กล/อิเล็กฯ)</option>
+                    <option value="orange">🟧 สีแสด (ไฟฟ้า/โภชนาการ/โรงแรม)</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- ================= TAB 1: MEMBERS ================= -->
+        <div v-if="currentTab === 'members'" class="space-y-5 animate-fade-in">
+
+            <!-- แผงสถิติภาพรวม -->
+            <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-l-purple-600">
+                    <div class="text-xs text-slate-500">จำนวนสมาชิกรวม</div>
+                    <div class="text-2xl font-heading font-bold text-slate-800 mt-0.5">{{ filteredMembers.length }} <span class="text-xs font-normal">คน</span></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-l-emerald-500">
+                    <div class="text-xs text-slate-500">ชำระเงินค่าเสื้อแล้ว</div>
+                    <div class="text-2xl font-heading font-bold text-emerald-600 mt-0.5">{{ paidCount }} <span class="text-xs font-normal text-slate-500">/ {{ filteredMembers.length }} คน</span></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-l-amber-500">
+                    <div class="text-xs text-slate-500">ค้างชำระเงิน</div>
+                    <div class="text-2xl font-heading font-bold text-amber-600 mt-0.5">{{ filteredMembers.length - paidCount }} <span class="text-xs font-normal">คน</span></div>
+                </div>
+                <div class="glass-card p-4 rounded-2xl border-l-4 border-l-blue-500">
+                    <div class="text-xs text-slate-500">รับเสื้อเรียบร้อยแล้ว</div>
+                    <div class="text-2xl font-heading font-bold text-blue-600 mt-0.5">{{ receivedCount }} <span class="text-xs font-normal">คน</span></div>
+                </div>
+            </div>
+
+            <!-- การ์ดจัดการสมาชิก -->
+            <div class="glass-card p-4 sm:p-6 rounded-3xl">
+                <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-5">
+                    <div>
+                        <h2 class="text-xl sm:text-2xl font-heading font-bold text-slate-800">ตารางสำรวจไซต์เสื้อและสมาชิก</h2>
+                        <p class="text-xs text-slate-500">จัดเรียงอัตโนมัติตามแผนก ห้อง และเลขท้ายรหัสนักศึกษา 3 ตัวท้าย</p>
+                    </div>
+
+                    <div class="flex flex-wrap gap-2 w-full lg:w-auto">
+                        <!-- ปุ่ม Import Excel -->
+                        <input type="file" ref="excelInput" @change="handleExcelUpload" accept=".xlsx,.xls,.csv" class="hidden">
+                        <button v-if="canEditMembers" @click="$refs.excelInput.click()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none transition">
+                            📥 Import Excel
+                        </button>
+                        <button @click="exportPDF" class="bg-rose-600 hover:bg-rose-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none transition">
+                            📄 Export PDF (แยกห้อง)
+                        </button>
+                        <button @click="generateSummary" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none transition">
+                            📊 สรุปยอดไซต์เสื้อ
+                        </button>
+                        <button v-if="canEditMembers" @click="openAddMember" class="btn-chongkho px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-sm flex items-center justify-center gap-1.5 flex-1 sm:flex-none">
+                            + เพิ่มรายชื่อ
+                        </button>
+                    </div>
+                </div>
+
+                <!-- ตัวกรองระดับชั้น / แผนก / ค้นหา -->
+                <div class="space-y-3 mb-5">
+                    <div class="flex gap-1.5 overflow-x-auto pb-1 scrollbar-hide">
+                        <button @click="levelFilter = 'all'" :class="levelFilter === 'all' ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">ทุกระดับชั้น</button>
+                        <button v-for="lvl in levels" :key="lvl.id" @click="levelFilter = lvl.id" :class="levelFilter === lvl.id ? 'bg-slate-800 text-white' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'" class="px-3.5 py-1.5 rounded-full text-xs font-bold whitespace-nowrap transition">{{ lvl.name }}</button>
+                    </div>
+
+                    <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-2.5 text-slate-400">🔍</span>
+                            <input v-model.trim="searchQuery" type="text" placeholder="ค้นหาชื่อ, รหัสนักศึกษา, ไซต์เสื้อ..." class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm outline-none focus:ring-2 focus:ring-purple-200">
+                        </div>
+                        <div class="relative">
+                            <span class="absolute left-3.5 top-2.5 text-slate-400">🏢</span>
+                            <select v-model="departmentFilter" class="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm font-semibold text-slate-700 outline-none">
+                                <option value="all">ทุกแผนกวิชา ({{ uniqueDepartments.length }} แผนก)</option>
+                                <option v-for="dept in uniqueDepartments" :key="dept" :value="dept">{{ dept }}</option>
+                            </select>
+                        </div>
+                        <div class="flex items-center justify-between bg-emerald-50/80 border border-emerald-200 px-3.5 py-2 rounded-xl" v-if="filteredMembers.length > 0 && canEditMembers">
+                            <span class="text-xs font-bold text-emerald-800">ติ๊กจ่ายเงินทุกคนที่แสดง ({{ filteredMembers.length }} คน)</span>
+                            <button @click="confirmBulkPay(filteredMembers, true)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1 rounded-lg text-xs font-bold transition">ยืนยันทั้งหมด</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- แสดงตารางแยกตามแผนก และแยกตามห้อง -->
+                <div v-if="Object.keys(groupedMembers).length > 0" class="space-y-6">
+                    <div v-for="(rooms, dept) in groupedMembers" :key="dept" class="bg-slate-50/70 rounded-2xl border border-slate-200/90 p-3 sm:p-5">
+                        <div class="flex flex-wrap justify-between items-center gap-2 mb-4 pb-2 border-b border-slate-200">
+                            <div class="flex items-center gap-2">
+                                <span class="bg-purple-100 text-purple-700 p-1.5 rounded-lg text-sm">🏢</span>
+                                <h3 class="text-base sm:text-lg font-heading font-bold text-slate-800">{{ dept }}</h3>
+                                <span :class="getBadgeClass(getDeptColor(dept))" class="px-2.5 py-0.5 rounded-full text-[11px] font-bold">
+                                    {{ getColorName(getDeptColor(dept)) }}
+                                </span>
+                            </div>
+                            <div class="flex items-center gap-2">
+                                <button v-if="canEditMembers" @click="confirmBulkPayObj(rooms, true)" class="text-xs font-bold text-emerald-700 bg-white hover:bg-emerald-50 border border-emerald-200 px-3 py-1.5 rounded-xl transition">
+                                    💰 จ่ายครบทั้งแผนก
+                                </button>
+                                <button v-if="user.role === 'admin'" @click="deleteDepartmentMembers(dept)" class="text-xs font-bold text-red-600 bg-white hover:bg-red-50 border border-red-200 px-3 py-1.5 rounded-xl transition">
+                                    🗑️ ลบทั้งแผนก
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- วนลูปแต่ละห้องในแผนก -->
+                        <div v-for="(roomMembers, roomKey) in rooms" :key="roomKey" class="mb-5 last:mb-0">
+                            <div class="flex flex-wrap items-center justify-between gap-2 mb-2">
+                                <div class="flex items-center gap-2 bg-white px-3.5 py-1.5 rounded-full border border-slate-200 shadow-sm">
+                                    <span class="w-2.5 h-2.5 rounded-full bg-purple-600"></span>
+                                    <span class="font-heading font-bold text-xs sm:text-sm text-slate-700">{{ roomKey }}</span>
+                                    <span class="text-xs text-slate-500">({{ roomMembers.length }} คน)</span>
+                                </div>
+
+                                <!-- สรุปไซต์เสื้อประจำห้องแบบย่อ -->
+                                <div class="flex flex-wrap items-center gap-1.5 text-[11px]">
+                                    <span v-for="(cnt, sz) in getRoomSizeSummary(roomMembers)" :key="sz" class="bg-white border border-slate-200 px-2 py-0.5 rounded-md font-mono font-bold text-slate-700">
+                                        {{ sz }}:{{ cnt }}
+                                    </span>
+                                    <button v-if="canEditMembers" @click="confirmBulkPay(roomMembers, true)" class="ml-1 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 px-2.5 py-0.5 rounded-md font-bold transition">
+                                        ✓ จ่ายครบห้องนี้
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div class="overflow-x-auto rounded-xl border border-slate-200 bg-white shadow-sm">
+                                <table class="w-full text-left min-w-[640px]">
+                                    <thead class="bg-slate-100/80 text-slate-600 text-xs font-bold border-b border-slate-200">
+                                        <tr>
+                                            <th class="p-2.5 w-14 text-center">ลำดับ</th>
+                                            <th class="p-2.5 w-36">รหัสนักศึกษา <span class="text-[10px] text-purple-600">(เรียง 3 ตัวท้าย)</span></th>
+                                            <th class="p-2.5">ชื่อ-นามสกุล</th>
+                                            <th class="p-2.5 w-24 text-center">สังกัดสี</th>
+                                            <th class="p-2.5 w-20 text-center">ไซต์เสื้อ</th>
+                                            <th class="p-2.5 w-40 text-center">สถานะ</th>
+                                            <th v-if="canEditMembers" class="p-2.5 w-24 text-right">จัดการ</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+                                        <tr v-for="(m, idx) in roomMembers" :key="m.id" class="hover:bg-purple-50/40 transition">
+                                            <td class="p-2.5 text-center font-mono text-slate-400">{{ idx + 1 }}</td>
+                                            <td class="p-2.5 font-mono text-slate-700">
+                                                <template v-if="m.student_id && String(m.student_id).length >= 3">
+                                                    <span>{{ String(m.student_id).slice(0, -3) }}</span><strong class="text-purple-700 underline">{{ String(m.student_id).slice(-3) }}</strong>
+                                                </template>
+                                                <template v-else>{{ m.student_id || '-' }}</template>
+                                            </td>
+                                            <td class="p-2.5 font-medium text-slate-800">{{ m.name }}</td>
+                                            <td class="p-2.5 text-center">
+                                                <span :class="getBadgeClass(m.color)" class="px-2 py-0.5 rounded-full text-[10px] font-bold">
+                                                    {{ getColorName(m.color) }}
+                                                </span>
+                                            </td>
+                                            <td class="p-2.5 text-center">
+                                                <span class="bg-slate-100 px-2.5 py-1 rounded-lg font-mono font-bold text-slate-800 border border-slate-200">{{ m.shirt_size }}</span>
+                                            </td>
+                                            <td class="p-2.5 text-center">
+                                                <div class="inline-flex gap-1.5 items-center justify-center">
+                                                    <button v-if="canEditMembers" @click="quickToggleStatus(m, 'is_paid')" :class="m.is_paid ? 'bg-emerald-100 text-emerald-800 border-emerald-300' : 'bg-slate-100 text-slate-400 border-slate-200'" class="px-2 py-0.5 rounded-md text-[11px] font-bold border transition" title="คลิกเพื่อสลับสถานะจ่ายเงิน">
+                                                        {{ m.is_paid ? '💰 จ่ายแล้ว' : 'รอจ่าย' }}
+                                                    </button>
+                                                    <span v-else :class="m.is_paid ? 'text-emerald-700 font-bold' : 'text-slate-400'" class="text-xs">{{ m.is_paid ? '💰 จ่ายแล้ว' : 'รอจ่าย' }}</span>
+
+                                                    <button v-if="canEditMembers" @click="quickToggleStatus(m, 'is_received')" :class="m.is_received ? 'bg-blue-100 text-blue-800 border-blue-300' : 'bg-slate-100 text-slate-400 border-slate-200'" class="px-2 py-0.5 rounded-md text-[11px] font-bold border transition" title="คลิกเพื่อสลับสถานะรับเสื้อ">
+                                                        {{ m.is_received ? '👕 รับแล้ว' : 'รอรับ' }}
+                                                    </button>
+                                                </div>
+                                            </td>
+                                            <td v-if="canEditMembers" class="p-2.5 text-right">
+                                                <div class="flex gap-1.5 justify-end">
+                                                    <button @click="openEditMember(m)" class="p-1.5 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200" title="แก้ไข">✏️</button>
+                                                    <button v-if="canDeleteMembers" @click="deleteMember(m.id)" class="p-1.5 rounded-lg bg-red-50 text-red-600 hover:bg-red-100 border border-red-200" title="ลบ">🗑️</button>
+                                                </div>
+                                            </td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                <div v-else class="p-12 text-center text-slate-400 bg-slate-50 rounded-2xl border border-dashed border-slate-200">
+                    <div class="text-3xl mb-2">📭</div>
+                    <div class="font-bold text-slate-600">ยังไม่มีข้อมูลสมาชิกในหมวดหมู่นี้</div>
+                    <div class="text-xs mt-1">สามารถกดปุ่ม "+ เพิ่มรายชื่อ" หรือ "📥 Import Excel" ด้านบนเพื่อนำเข้าข้อมูลได้ทันที</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 2: BUDGET ================= -->
+        <div v-if="currentTab === 'budget'" class="animate-fade-in">
+            <div class="glass-card p-5 sm:p-8 rounded-3xl">
+                <h2 class="text-xl sm:text-2xl font-heading font-bold text-slate-800 mb-5">ระบบบริหารงบประมาณสี</h2>
+                <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+                    <div class="bg-emerald-50 p-5 rounded-2xl border border-emerald-200">
+                        <div class="text-xs font-bold text-emerald-700 uppercase">รายรับทั้งหมด</div>
+                        <div class="text-2xl sm:text-3xl font-heading font-bold text-emerald-800 mt-1">{{ formatCurrency(totalIncome) }}</div>
+                    </div>
+                    <div class="bg-rose-50 p-5 rounded-2xl border border-rose-200">
+                        <div class="text-xs font-bold text-rose-700 uppercase">รายจ่ายทั้งหมด</div>
+                        <div class="text-2xl sm:text-3xl font-heading font-bold text-rose-800 mt-1">{{ formatCurrency(totalExpense) }}</div>
+                    </div>
+                    <div class="bg-blue-50 p-5 rounded-2xl border border-blue-200">
+                        <div class="text-xs font-bold text-blue-700 uppercase">งบประมาณคงเหลือสุทธิ</div>
+                        <div class="text-2xl sm:text-3xl font-heading font-bold text-blue-800 mt-1">{{ formatCurrency(totalIncome - totalExpense) }}</div>
+                    </div>
+                </div>
+
+                <div class="flex flex-col sm:flex-row gap-3 mb-6" v-if="canManageBudget">
+                    <button @click="openTransactionModal('set_balance')" class="bg-teal-600 hover:bg-teal-700 text-white py-3 px-5 rounded-xl text-sm font-bold shadow-sm transition">
+                        💰 ตั้งงบประมาณเริ่มต้น (ยอดยกมา)
+                    </button>
+                    <button @click="openTransactionModal('new')" class="flex-1 btn-chongkho py-3 px-5 rounded-xl text-sm font-bold shadow-sm">
+                        + บันทึกรายรับ / เบิกจ่ายรายการใหม่
+                    </button>
+                </div>
+
+                <div class="space-y-2.5">
+                    <div v-for="t in budgetList" :key="t.id" class="flex flex-col sm:flex-row justify-between sm:items-center gap-3 bg-white border border-slate-200 rounded-2xl p-4 hover:shadow-sm transition">
+                        <div class="flex gap-3.5 items-center">
+                            <div :class="t.type === 'income' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'" class="w-10 h-10 rounded-xl flex items-center justify-center text-lg font-bold shrink-0">
+                                {{ t.type === 'income' ? '↗' : '↘' }}
+                            </div>
+                            <div>
+                                <div class="font-bold text-slate-800 text-sm sm:text-base">{{ t.description }}</div>
+                                <span :class="getBadgeClass(t.color)" class="px-2 py-0.5 rounded-md text-[10px] font-bold">{{ getColorName(t.color) }}</span>
+                            </div>
+                        </div>
+                        <div class="flex justify-between sm:justify-end items-center gap-4 border-t sm:border-t-0 pt-2 sm:pt-0 border-slate-100">
+                            <span :class="t.type === 'income' ? 'text-emerald-600' : 'text-rose-600'" class="font-heading font-bold text-lg">
+                                {{ t.type === 'income' ? '+' : '-' }}{{ formatCurrency(t.amount) }}
+                            </span>
+                            <div v-if="canManageBudget" class="flex gap-1.5">
+                                <button @click="openTransactionModal('edit', t)" class="p-2 rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 border border-amber-200">✏️</button>
+                                <button @click="deleteTransaction(t.id)" class="p-2 rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200">🗑️</button>
+                            </div>
+                        </div>
+                    </div>
+                    <div v-if="budgetList.length === 0" class="text-center py-8 text-slate-400">ยังไม่มีรายการธุรกรรมงบประมาณ</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ================= TAB 3: USERS (ADMIN ONLY) ================= -->
+        <div v-if="currentTab === 'users' && user.role === 'admin'" class="animate-fade-in">
+            <div class="glass-card p-5 sm:p-8 rounded-3xl">
+                <div class="flex flex-col sm:flex-row justify-between sm:items-center gap-2 mb-5">
+                    <div>
+                        <h2 class="text-xl sm:text-2xl font-heading font-bold text-slate-800">จัดการผู้ใช้งานและความปลอดภัย</h2>
+                        <p class="text-xs text-slate-500">รีเซ็ตรหัสผ่านกลับเป็นค่าเริ่มต้น <code class="bg-slate-200 px-1.5 py-0.5 rounded font-bold text-slate-800">1</code> ได้ตลอดเวลา (เมื่อผู้ใช้ล็อกอินด้วยรหัส 1 ระบบจะบังคับตั้งรหัสใหม่ทันที)</p>
+                    </div>
+                    <button @click="loadUsers" class="bg-slate-100 hover:bg-slate-200 text-slate-700 px-4 py-2 rounded-xl text-xs font-bold self-start sm:self-auto">🔄 รีเฟรชรายชื่อ</button>
+                </div>
+
+                <div class="overflow-x-auto rounded-2xl border border-slate-200 bg-white">
+                    <table class="w-full text-left min-w-[720px]">
+                        <thead class="bg-slate-100 text-slate-600 text-xs font-bold">
+                            <tr>
+                                <th class="p-3.5">Username</th>
+                                <th class="p-3.5">ชื่อ-นามสกุล</th>
+                                <th class="p-3.5">ตำแหน่ง</th>
+                                <th class="p-3.5">สังกัดสี</th>
+                                <th class="p-3.5 text-center">สถานะอนุมัติ</th>
+                                <th class="p-3.5 text-right">การจัดการสิทธิ์และรหัสผ่าน</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-100 text-xs sm:text-sm">
+                            <tr v-for="u in userList" :key="u.id" class="hover:bg-slate-50">
+                                <td class="p-3.5 font-mono font-bold text-purple-700">{{ u.username }}</td>
+                                <td class="p-3.5 font-medium text-slate-800">{{ u.full_name }}</td>
+                                <td class="p-3.5"><span class="bg-slate-100 px-2.5 py-1 rounded-lg text-xs font-semibold">{{ getRoleName(u.role) }}</span></td>
+                                <td class="p-3.5"><span :class="getBadgeClass(u.color)" class="px-2.5 py-1 rounded-full text-xs font-bold">{{ getColorName(u.color) }}</span></td>
+                                <td class="p-3.5 text-center">
+                                    <span v-if="String(u.approved) === 'true'" class="bg-emerald-100 text-emerald-800 px-2.5 py-1 rounded-full text-xs font-bold">✓ อนุมัติแล้ว</span>
+                                    <span v-else class="bg-amber-100 text-amber-800 px-2.5 py-1 rounded-full text-xs font-bold">⏳ รออนุมัติ</span>
+                                </td>
+                                <td class="p-3.5 text-right space-x-2">
+                                    <button v-if="String(u.approved) !== 'true'" @click="approveUser(u)" class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition">
+                                        ✓ อนุมัติบัญชี
+                                    </button>
+                                    <button @click="resetPasswordToDefault(u)" class="bg-slate-800 hover:bg-slate-700 text-white px-3 py-1.5 rounded-xl text-xs font-bold shadow-sm transition">
+                                        🔑 รีเซ็ตรหัสเป็น "1"
+                                    </button>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- ================= MODAL 1: บังคับเปลี่ยนรหัสผ่านเมื่อรหัสเป็น "1" (must_reset) ================= -->
+    <div v-if="mustResetModal" class="fixed inset-0 bg-slate-900/80 backdrop-blur-md flex items-center justify-center p-4 z-[80]">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl border-t-8 border-t-amber-500 animate-fade-in">
+            <div class="text-center mb-4">
+                <div class="w-14 h-14 rounded-full bg-amber-100 text-amber-600 flex items-center justify-center text-2xl mx-auto mb-2">🔐</div>
+                <h3 class="text-xl font-heading font-bold text-slate-800">ตั้งรหัสผ่านใหม่ก่อนเข้าใช้งาน</h3>
+                <p class="text-xs text-slate-500 mt-1">เนื่องจากคุณเข้าสู่ระบบครั้งแรก หรือแอดมินได้รีเซ็ตรหัสผ่านเป็นค่าเริ่มต้น (<code class="font-bold">1</code>) กรุณาตั้งรหัสผ่านใหม่เพื่อความปลอดภัย</p>
+            </div>
+            <form @submit.prevent="submitForcedPasswordChange" class="space-y-3.5">
+                <div>
+                    <label class="text-xs font-bold text-slate-600 mb-1 block">รหัสผ่านเดิม (หากเพิ่งถูกรีเซ็ตให้ใส่ 1)</label>
+                    <input v-model="forcePwForm.old_password" type="password" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-600 mb-1 block">รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร และห้ามเป็น 1)</label>
+                    <input v-model="forcePwForm.new_password" type="password" minlength="6" placeholder="ตั้งรหัสผ่านใหม่ 6 ตัวขึ้นไป" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-300" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-600 mb-1 block">ยืนยันรหัสผ่านใหม่อีกครั้ง</label>
+                    <input v-model="forcePwForm.confirm_password" type="password" minlength="6" placeholder="กรอกรหัสผ่านใหม่อีกครั้ง" class="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-sm outline-none focus:ring-2 focus:ring-amber-300" required>
+                </div>
+                <button type="submit" class="w-full btn-chongkho py-3.5 rounded-xl font-heading font-bold text-sm shadow-lg mt-2">
+                    ✓ บันทึกรหัสผ่านใหม่และเข้าสู่ระบบ
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 2: IMPORT EXCEL PREVIEW & MAPPING ================= -->
+    <div v-if="showImportModal" class="fixed inset-0 bg-slate-900/75 backdrop-blur-sm flex items-center justify-center p-2 sm:p-4 z-[70]">
+        <div class="bg-white rounded-3xl w-full max-w-6xl max-h-[92vh] flex flex-col shadow-2xl overflow-hidden animate-fade-in">
+            <!-- Header -->
+            <div class="p-4 sm:p-6 bg-slate-900 text-white flex flex-wrap justify-between items-center gap-3">
+                <div>
+                    <h3 class="text-lg sm:text-xl font-heading font-bold flex items-center gap-2">
+                        📥 นำเข้าและตรวจสอบข้อมูลจากไฟล์ Excel ({{ importRows.length }} รายการ)
+                    </h3>
+                    <p class="text-xs text-slate-300 mt-0.5">อ่านข้อมูลครบทุกหน้า (Sheets) และทุกตาราง • คุณสามารถแก้ไขข้อมูลในตารางด้านล่างได้โดยตรงก่อนกดบันทึก</p>
+                </div>
+                <button @click="showImportModal = false" class="text-slate-400 hover:text-white text-xl px-2">✕</button>
+            </div>
+
+            <!-- แถบตั้งค่า Mapping และค่าเริ่มต้นสำหรับแถวที่ไม่มีคอลัมน์ -->
+            <div class="p-4 bg-slate-50 border-b border-slate-200 space-y-3 text-xs">
+                <div class="flex flex-wrap items-center gap-2">
+                    <span class="font-bold text-slate-700">📄 แผ่นงาน (Sheet) ที่พบในไฟล์:</span>
+                    <button v-for="sh in excelSheetNames" :key="sh" @click="toggleSheetSelection(sh)" :class="selectedSheets.includes(sh) ? 'bg-purple-600 text-white' : 'bg-white text-slate-600 border'" class="px-3 py-1 rounded-full font-bold transition">
+                        {{ selectedSheets.includes(sh) ? '✓ ' : '' }}{{ sh }}
+                    </button>
+                    <span class="text-slate-400 ml-auto">* ระบบรวมข้อมูลทุกหน้าที่เลือกให้อัตโนมัติ</span>
+                </div>
+
+                <div class="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1">
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-1">ค่าเริ่มต้นสังกัดสี (กรณีไฟล์ไม่ระบุ)</label>
+                        <select v-model="importDefaults.color" @change="applyImportDefaults" class="w-full p-2 bg-white border border-slate-200 rounded-lg font-bold">
+                            <option value="blue">🟦 สีน้ำเงิน</option>
+                            <option value="green">🟩 สีเขียว</option>
+                            <option value="purple">🟪 สีม่วง</option>
+                            <option value="orange">🟧 สีแสด</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-1">ค่าเริ่มต้นแผนกวิชา</label>
+                        <select v-model="importDefaults.department" @change="applyImportDefaults" class="w-full p-2 bg-white border border-slate-200 rounded-lg font-bold">
+                            <option v-for="d in getDeptsByColor(importDefaults.color)" :key="d" :value="d">{{ d }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-1">ค่าเริ่มต้นระดับชั้น</label>
+                        <select v-model="importDefaults.level" @change="applyImportDefaults" class="w-full p-2 bg-white border border-slate-200 rounded-lg">
+                            <option v-for="l in levels" :key="l.id" :value="l.id">{{ l.name }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="font-bold text-slate-600 block mb-1">ค่าเริ่มต้นห้อง</label>
+                        <select v-model="importDefaults.room" @change="applyImportDefaults" class="w-full p-2 bg-white border border-slate-200 rounded-lg">
+                            <option v-for="n in 10" :key="n" :value="String(n)">ห้อง {{ n }}</option>
+                            <option value="-">-</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ตาราง Preview แก้ไขได้ทุกช่อง -->
+            <div class="flex-1 overflow-auto p-4">
+                <table class="w-full text-left border-collapse min-w-[900px] text-xs">
+                    <thead class="bg-slate-100 text-slate-700 sticky top-0 z-10 shadow-sm">
+                        <tr>
+                            <th class="p-2 border w-10 text-center">#</th>
+                            <th class="p-2 border w-28">หน้าชีต</th>
+                            <th class="p-2 border w-36">รหัสนักศึกษา</th>
+                            <th class="p-2 border">ชื่อ-นามสกุล *</th>
+                            <th class="p-2 border w-28">สังกัดสี *</th>
+                            <th class="p-2 border w-44">แผนกวิชา *</th>
+                            <th class="p-2 border w-28">ระดับชั้น</th>
+                            <th class="p-2 border w-20">ห้อง</th>
+                            <th class="p-2 border w-24">ไซต์เสื้อ *</th>
+                            <th class="p-2 border w-20 text-center">จ่ายเงิน</th>
+                            <th class="p-2 border w-14 text-center">ลบ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(r, i) in importRows" :key="i" class="hover:bg-purple-50/30">
+                            <td class="p-1.5 border text-center font-mono text-slate-400">{{ i + 1 }}</td>
+                            <td class="p-1.5 border text-[11px] text-slate-500 truncate max-w-[100px]" :title="r._sheet">{{ r._sheet }}</td>
+                            <td class="p-1.5 border">
+                                <input v-model.trim="r.student_id" class="w-full p-1 bg-slate-50 border border-slate-200 rounded font-mono text-xs" placeholder="รหัส 11 หลัก">
+                            </td>
+                            <td class="p-1.5 border">
+                                <input v-model.trim="r.name" class="w-full p-1 bg-slate-50 border border-slate-200 rounded font-medium text-xs" placeholder="ชื่อ-นามสกุล">
+                            </td>
+                            <td class="p-1.5 border">
+                                <select v-model="r.color" @change="onRowColorChange(r)" class="w-full p-1 bg-slate-50 border border-slate-200 rounded text-xs font-bold">
+                                    <option value="blue">สีน้ำเงิน</option>
+                                    <option value="green">สีเขียว</option>
+                                    <option value="purple">สีม่วง</option>
+                                    <option value="orange">สีแสด</option>
+                                </select>
+                            </td>
+                            <td class="p-1.5 border">
+                                <select v-model="r.department" class="w-full p-1 bg-slate-50 border border-slate-200 rounded text-xs">
+                                    <option v-for="d in getDeptsByColor(r.color)" :key="d" :value="d">{{ d }}</option>
+                                </select>
+                            </td>
+                            <td class="p-1.5 border">
+                                <select v-model="r.level" class="w-full p-1 bg-slate-50 border border-slate-200 rounded text-xs">
+                                    <option v-for="l in levels" :key="l.id" :value="l.id">{{ l.name }}</option>
+                                </select>
+                            </td>
+                            <td class="p-1.5 border">
+                                <input v-model.trim="r.room" class="w-full p-1 bg-slate-50 border border-slate-200 rounded text-center text-xs">
+                            </td>
+                            <td class="p-1.5 border">
+                                <select v-model="r.shirt_size" class="w-full p-1 bg-slate-50 border border-slate-200 rounded font-mono font-bold text-xs">
+                                    <option v-for="s in shirtSizes" :key="s" :value="s">{{ s }}</option>
+                                </select>
+                            </td>
+                            <td class="p-1.5 border text-center">
+                                <input type="checkbox" v-model="r.is_paid" class="w-4 h-4 accent-emerald-600">
+                            </td>
+                            <td class="p-1.5 border text-center">
+                                <button @click="importRows.splice(i, 1)" class="text-rose-500 hover:text-rose-700 font-bold">✕</button>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <!-- แสดงคอลัมน์พิเศษอื่นๆ ที่ตรวจพบในไฟล์ Excel -->
+                <div v-if="extraExcelHeaders.length > 0" class="mt-4 p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900">
+                    <strong>🔍 คอลัมน์เพิ่มเติมที่ตรวจพบในไฟล์ Excel:</strong> {{ extraExcelHeaders.join(', ') }}
+                    <span class="text-amber-700 ml-1">(ระบบดึงข้อมูลหลักเข้าตารางด้านบนให้แล้ว และคุณสามารถกดปุ่ม "+ เพิ่มแถวว่าง" หรือแก้ไขทุกช่องได้ตามต้องการ)</span>
+                </div>
+            </div>
+
+            <!-- Footer -->
+            <div class="p-4 bg-slate-100 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3">
+                <button @click="addBlankImportRow" class="bg-white hover:bg-slate-50 text-slate-700 border border-slate-300 px-4 py-2 rounded-xl text-xs font-bold">
+                    + เพิ่มแถวข้อมูล
+                </button>
+                <div class="flex gap-2">
+                    <button @click="showImportModal = false" class="bg-white hover:bg-slate-200 text-slate-700 px-5 py-2.5 rounded-xl text-xs sm:text-sm font-bold border border-slate-300">
+                        ยกเลิก
+                    </button>
+                    <button @click="confirmSaveImport" :disabled="importRows.length === 0" class="btn-chongkho px-6 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md">
+                        ✓ ยืนยันบันทึกข้อมูลทั้ง {{ importRows.length }} รายการลงฐานข้อมูล
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 3: ADD / EDIT MEMBER ================= -->
+    <div v-if="showAddMemberModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-heading font-bold mb-5 text-slate-800">{{ memberForm.id ? '✏️ แก้ไขข้อมูลสมาชิก' : '➕ เพิ่มสมาชิกใหม่' }}</h3>
+            <form @submit.prevent="saveMember" class="space-y-3.5">
+                <div v-if="user.role === 'admin'">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">สังกัดสี</label>
+                    <select v-model="memberForm.target_color" @change="onMemberFormColorChange" class="w-full bg-slate-50 p-3 rounded-xl border border-slate-200 text-sm font-bold outline-none">
+                        <option value="blue">🟦 สีน้ำเงิน</option>
+                        <option value="green">🟩 สีเขียว</option>
+                        <option value="purple">🟪 สีม่วง</option>
+                        <option value="orange">🟧 สีแสด</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">แผนกวิชา</label>
+                    <select v-model="memberForm.department" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none" required>
+                        <option value="" disabled>เลือกแผนกวิชา</option>
+                        <option v-for="dept in currentDepartmentOptions" :key="dept" :value="dept">{{ dept }}</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">ชื่อ-นามสกุล</label>
+                    <input v-model.trim="memberForm.name" placeholder="ระบุชื่อ-นามสกุล" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none" required>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">รหัสนักศึกษา (11 หลัก / ครูเว้นว่างได้)</label>
+                    <input v-model.trim="memberForm.student_id" placeholder="เช่น 68319010007" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-mono outline-none">
+                </div>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 block mb-1">ระดับชั้น</label>
+                        <select v-model="memberForm.level" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs sm:text-sm outline-none">
+                            <option v-for="l in levels" :key="l.id" :value="l.id">{{ l.name }}</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 block mb-1">ห้อง</label>
+                        <select v-model="memberForm.room" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs sm:text-sm outline-none">
+                            <option v-for="n in 10" :key="n" :value="String(n)">{{ n }}</option>
+                            <option value="-">-</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 block mb-1">ไซต์เสื้อ</label>
+                        <select v-model="memberForm.shirt_size" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-xs sm:text-sm font-bold font-mono outline-none">
+                            <option v-for="s in shirtSizes" :key="s" :value="s">{{ s }}</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="flex gap-3 pt-2">
+                    <label class="flex items-center gap-2 cursor-pointer bg-emerald-50 p-3 rounded-xl border border-emerald-200 flex-1 justify-center">
+                        <input type="checkbox" v-model="memberForm.is_paid" class="w-4 h-4 accent-emerald-600">
+                        <span class="text-xs font-bold text-emerald-800">💰 จ่ายเงินแล้ว</span>
+                    </label>
+                    <label class="flex items-center gap-2 cursor-pointer bg-blue-50 p-3 rounded-xl border border-blue-200 flex-1 justify-center">
+                        <input type="checkbox" v-model="memberForm.is_received" class="w-4 h-4 accent-blue-600">
+                        <span class="text-xs font-bold text-blue-800">👕 รับเสื้อแล้ว</span>
+                    </label>
+                </div>
+
+                <div class="flex gap-2.5 pt-3">
+                    <button type="button" @click="showAddMemberModal = false" class="flex-1 bg-slate-100 hover:bg-slate-200 py-3 rounded-xl text-sm font-bold text-slate-600">ยกเลิก</button>
+                    <button type="submit" class="flex-1 btn-chongkho py-3 rounded-xl text-sm font-bold shadow-md">บันทึกข้อมูล</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 4: EDIT PROFILE & PASSWORD ================= -->
+    <div v-if="showEditProfileModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-heading font-bold mb-5 text-slate-800">🔐 แก้ไขข้อมูลส่วนตัว & รหัสผ่าน</h3>
+            <form @submit.prevent="updateProfile" class="space-y-4">
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">ชื่อ-นามสกุล</label>
+                    <input v-model.trim="profileForm.full_name" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none" required>
+                </div>
+                <div class="border-t border-slate-200 pt-3 space-y-3">
+                    <p class="text-xs font-bold text-slate-600">เปลี่ยนรหัสผ่านใหม่ (หากไม่ต้องการเปลี่ยนให้เว้นว่างไว้)</p>
+                    <input v-model="profileForm.old_password" type="password" placeholder="รหัสผ่านปัจจุบัน" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
+                    <input v-model="profileForm.new_password" type="password" placeholder="รหัสผ่านใหม่ (อย่างน้อย 6 ตัวอักษร)" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none">
+                </div>
+                <div class="flex gap-2.5 pt-2">
+                    <button type="button" @click="showEditProfileModal = false" class="flex-1 bg-slate-100 py-3 rounded-xl text-sm font-bold text-slate-600">ยกเลิก</button>
+                    <button type="submit" class="flex-1 btn-chongkho py-3 rounded-xl text-sm font-bold shadow-md">บันทึกการเปลี่ยนแปลง</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= MODAL 5: BUDGET TRANSACTION ================= -->
+    <div v-if="showTransactionModal" class="fixed inset-0 bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+        <div class="bg-white p-6 sm:p-8 rounded-3xl w-full max-w-md shadow-2xl animate-fade-in">
+            <h3 class="text-xl font-heading font-bold mb-5 text-slate-800">
+                {{ transactionMode === 'edit' ? '✏️ แก้ไขรายการงบประมาณ' : (transactionMode === 'set_balance' ? '💰 ตั้งงบประมาณเริ่มต้น' : '➕ บันทึกรายการงบประมาณ') }}
+            </h3>
+            <form @submit.prevent="saveTransaction" class="space-y-4">
+                <div v-if="user.role === 'admin' && transactionMode !== 'edit'">
+                    <label class="text-xs font-bold text-slate-500 block mb-1">สังกัดสี</label>
+                    <select v-model="transactionForm.color" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold">
+                        <option value="blue">🟦 สีน้ำเงิน</option>
+                        <option value="green">🟩 สีเขียว</option>
+                        <option value="purple">🟪 สีม่วง</option>
+                        <option value="orange">🟧 สีแสด</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-xs font-bold text-slate-500 block mb-1">รายละเอียดรายการ</label>
+                    <input v-model.trim="transactionForm.description" placeholder="เช่น ค่าสวัสดิการนักกีฬา, ค่าอุปกรณ์เชียร์" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none" required :disabled="transactionMode === 'set_balance'">
+                </div>
+                <div class="grid grid-cols-3 gap-2.5">
+                    <div class="col-span-2">
+                        <label class="text-xs font-bold text-slate-500 block mb-1">จำนวนเงิน (บาท)</label>
+                        <input v-model="transactionForm.amount" type="number" step="0.01" min="0" placeholder="0.00" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm outline-none" required>
+                    </div>
+                    <div>
+                        <label class="text-xs font-bold text-slate-500 block mb-1">ประเภท</label>
+                        <select v-model="transactionForm.type" class="w-full p-3 bg-slate-50 rounded-xl border border-slate-200 text-sm font-bold outline-none" :disabled="transactionMode === 'set_balance'">
+                            <option value="income">รายรับ (+)</option>
+                            <option value="expense">รายจ่าย (-)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="border-t border-dashed border-slate-200 pt-3">
+                    <label class="text-xs font-bold text-rose-600 block mb-1">🔒 ยืนยันรหัสผ่านของคุณเพื่อบันทึกธุรกรรม</label>
+                    <input v-model="transactionForm.confirm_password" type="password" placeholder="กรอกรหัสผ่านของคุณ" class="w-full p-3 bg-rose-50 border border-rose-200 rounded-xl text-sm outline-none" required>
+                </div>
+                <div class="flex gap-2.5 pt-2">
+                    <button type="button" @click="showTransactionModal = false" class="flex-1 bg-slate-100 py-3 rounded-xl text-sm font-bold text-slate-600">ยกเลิก</button>
+                    <button type="submit" class="flex-1 btn-chongkho py-3 rounded-xl text-sm font-bold shadow-md">ยืนยันบันทึก</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- ================= PDF TEMPLATE (ซ่อนไว้สำหรับ Export PDF แยกห้อง เรียง 3 ตัวท้าย) ================= -->
+    <div id="pdf-container">
+        <template v-for="(deptRooms, deptName) in groupedMembers" :key="deptName">
+            <div v-for="(roomMembers, roomName) in deptRooms" :key="roomName" class="pdf-page">
+                <div class="pdf-header">
+                    <div style="font-size: 16px; font-weight: bold;">ใบเช็กรายชื่อและสำรวจไซต์เสื้อกีฬาสี "ชงโคเกมส์" วิทยาลัยเทคนิคพังงา</div>
+                    <div style="font-size: 14px; font-weight: bold; margin-top: 3px;">
+                        สังกัด: {{ getColorName(getDeptColor(deptName)) }} | แผนกวิชา: {{ deptName }} | {{ roomName }}
+                    </div>
+                    <div style="font-size: 10.5px; color: #475569; margin-top: 2px;">
+                        เรียงลำดับตามรหัสนักศึกษา 3 ตัวท้าย • พิมพ์เมื่อ: {{ new Date().toLocaleString('th-TH') }}
+                    </div>
+                </div>
+
+                <table class="pdf-table">
+                    <thead>
+                        <tr>
+                            <th style="width: 7%;">ลำดับ</th>
+                            <th style="width: 20%;">รหัสนักศึกษา</th>
+                            <th style="width: 37%;">ชื่อ - นามสกุล</th>
+                            <th style="width: 11%;">ไซต์เสื้อ</th>
+                            <th style="width: 12%;">ชำระเงิน</th>
+                            <th style="width: 13%;">ลายมือชื่อรับเสื้อ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="(m, idx) in roomMembers" :key="m.id">
+                            <td style="text-align: center;">{{ idx + 1 }}</td>
+                            <td style="text-align: center; font-family: monospace;">{{ m.student_id || '-' }}</td>
+                            <td>{{ m.name }}</td>
+                            <td style="text-align: center; font-weight: bold;">{{ m.shirt_size }}</td>
+                            <td style="text-align: center;">{{ m.is_paid ? 'จ่ายแล้ว' : 'รอจ่าย' }}</td>
+                            <td style="text-align: center;">{{ m.is_received ? 'รับแล้ว' : '' }}</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="pdf-size-box">
+                    <div style="font-weight: bold; margin-bottom: 4px;">
+                        📊 สรุปยอดไซต์เสื้อ ({{ deptName }} - {{ roomName }}) รวมทั้งสิ้น {{ roomMembers.length }} ตัว:
+                    </div>
+                    <div style="display: flex; flex-wrap: wrap; gap: 10px;">
+                        <span v-for="sz in shirtSizes" :key="sz" v-show="getRoomSizeSummary(roomMembers)[sz]">
+                            <strong>ไซต์ {{ sz }}:</strong> {{ getRoomSizeSummary(roomMembers)[sz] }} ตัว
+                        </span>
+                    </div>
+                    <div style="margin-top: 4px; font-size: 10.5px; color: #334155;">
+                        ชำระเงินแล้ว: {{ roomMembers.filter(x => x.is_paid).length }} คน | ค้างชำระ: {{ roomMembers.filter(x => !x.is_paid).length }} คน
+                    </div>
+                </div>
+            </div>
+        </template>
+
+        <!-- หน้าสุดท้าย: สรุปยอดรวมทุกไซต์ของทุกห้องที่ส่งออก -->
+        <div class="pdf-page">
+            <div class="pdf-header">
+                <div style="font-size: 18px; font-weight: bold;">ใบสรุปยอดรวมจำนวนเสื้อกีฬาสี "ชงโคเกมส์"</div>
+                <div style="font-size: 13px; margin-top: 4px;">วิทยาลัยเทคนิคพังงา • พิมพ์เมื่อ {{ new Date().toLocaleString('th-TH') }}</div>
+            </div>
+            <table class="pdf-table" style="margin-top: 15px;">
+                <thead>
+                    <tr>
+                        <th>ไซต์เสื้อ (Shirt Size)</th>
+                        <th>จำนวนรวม (ตัว)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr v-for="sz in shirtSizes" :key="sz">
+                        <td style="text-align: center; font-weight: bold;">ไซต์ {{ sz }}</td>
+                        <td style="text-align: center; font-weight: bold;">{{ getAllSizeSummary()[sz] || 0 }} ตัว</td>
+                    </tr>
+                    <tr style="background-color: #e2e8f0; font-weight: bold; font-size: 13px;">
+                        <td style="text-align: center;">รวมจำนวนเสื้อทั้งสิ้น</td>
+                        <td style="text-align: center;">{{ filteredMembers.length }} ตัว</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+</div>
+
+<script>
+const { createApp, ref, computed, onMounted } = Vue;
+
+const GOOGLE_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycby3Djm_i5DGsvptSEiU6UG3_woc731uSo01wK0m3IJxzlo2wcGDqFGmwGk32EAADCqP/exec';
+
+createApp({
+    setup() {
+        const token = ref(localStorage.getItem('ck_token') || '');
+        const user = ref(JSON.parse(localStorage.getItem('ck_user') || '{}'));
+        const isLoginMode = ref(true);
+        const showPassword = ref(false);
+        const currentTab = ref('members');
+
+        // Modals
+        const showAddMemberModal = ref(false);
+        const showTransactionModal = ref(false);
+        const showEditProfileModal = ref(false);
+        const showProfileMenu = ref(false);
+        const mustResetModal = ref(false);
+        const showImportModal = ref(false);
+        const transactionMode = ref('new');
+
+        // Data Lists (ใช้ ShallowRef เพื่อลดภาระการทำ Reactivity ของ Vue ในข้อมูลชุดใหญ่)
+        const members = ref([]);
+        const budgetList = ref([]);
+        const userList = ref([]);
+
+        // Filters
+        const levelFilter = ref('all');
+        const adminFilterColor = ref('all');
+        const departmentFilter = ref('all');
+        const searchQuery = ref('');
+
+        // Forms
+        const authForm = ref({ username: '', password: '', full_name: '', color: '', role: '' });
+        const forcePwForm = ref({ old_password: '', new_password: '', confirm_password: '' });
+        const memberForm = ref({ id: null, name: '', student_id: '', level: 'ปวช. 1', room: '1', shirt_size: 'M', target_color: 'blue', department: '', is_paid: false, is_received: false });
+        const transactionForm = ref({ id: null, description: '', amount: '', type: 'expense', color: 'blue', confirm_password: '' });
+        const profileForm = ref({ full_name: '', old_password: '', new_password: '' });
+
+        const departments = {
+            blue: ['ช่างก่อสร้าง', 'การตลาด', 'เทคโนโลยีธุรกิจดิจิทัล', 'เทคโนโลยีสารสนเทศ', 'คณะครู/บุคลากร'],
+            green: ['ช่างยนต์', 'การบัญชี', 'คณะครู/บุคลากร'],
+            purple: ['ไมซ์และอีเว้น', 'แปรรูปอาหาร', 'การท่องเที่ยว', 'ท่องเที่ยวเชิงคุณภาพ', 'ช่างกล', 'ช่างอิเล็กทรอนิกส์', 'คณะครู/บุคลากร'],
+            orange: ['ช่างไฟฟ้า', 'อาหารและโภชนาการ', 'การโรงแรม', 'คณะครู/บุคลากร']
+        };
+
+        const shirtSizes = ['SS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL', '6XL'];
+
+        const levels = [
+            { id: 'ปวช. 1', name: 'ปวช. 1' },
+            { id: 'ปวช. 2', name: 'ปวช. 2' },
+            { id: 'ปวช. 3', name: 'ปวช. 3' },
+            { id: 'ปวส. 1', name: 'ปวส. 1' },
+            { id: 'ปวส. 2', name: 'ปวส. 2' },
+            { id: 'คณะครู/บุคลากร', name: 'ครู/บุคลากร' }
+        ];
+
+        const colorMap = {
+            'สีน้ำเงิน': 'blue', 'น้ำเงิน': 'blue', 'blue': 'blue',
+            'สีเขียว': 'green', 'เขียว': 'green', 'green': 'green',
+            'สีม่วง': 'purple', 'ม่วง': 'purple', 'purple': 'purple',
+            'สีแสด': 'orange', 'แสด': 'orange', 'ส้ม': 'orange', 'สีส้ม': 'orange', 'orange': 'orange'
+        };
+
+        const sanitizeInput = (val) => {
+            if (val === null || val === undefined) return '';
+            let s = String(val).trim();
+            if (/^[=+\-@]/.test(s)) s = "'" + s;
+            return s.replace(/[<>]/g, '');
+        };
+
+        const cleanStr = (str) => (str || '').toString().toLowerCase().trim();
+
+        const getDeptColor = (deptName) => {
+            if (!deptName) return user.value.color || 'blue';
+            const d = deptName.trim();
+            for (const [col, list] of Object.entries(departments)) {
+                if (list.includes(d) && d !== 'คณะครู/บุคลากร') return col;
+            }
+            return user.value.color || 'blue';
+        };
+
+        const getDeptsByColor = (col) => departments[col] || departments.blue;
+
+        const normalizeLevel = (input) => {
+            if (!input) return 'ปวช. 1';
+            const c = input.toString().replace(/\s+/g, '').toLowerCase();
+            if (c.includes('ปวช.1') || c.includes('ปวช1') || c.includes('ช.1') || c === '1') return 'ปวช. 1';
+            if (c.includes('ปวช.2') || c.includes('ปวช2') || c.includes('ช.2') || c === '2') return 'ปวช. 2';
+            if (c.includes('ปวช.3') || c.includes('ปวช3') || c.includes('ช.3') || c === '3') return 'ปวช. 3';
+            if (c.includes('ปวส.1') || c.includes('ปวส1') || c.includes('ส.1') || c === '4') return 'ปวส. 1';
+            if (c.includes('ปวส.2') || c.includes('ปวส2') || c.includes('ส.2') || c === '5') return 'ปวส. 2';
+            if (c.includes('ครู') || c.includes('บุคลากร') || c.includes('เจ้าหน้าที่')) return 'คณะครู/บุคลากร';
+            return input;
+        };
+
+        // ================= OPTIMIZED API CALL =================
+        const callSheet = async (action, payload = {}) => {
+            try {
+                const body = { action, token: token.value, ...payload };
+                const response = await axios.post(GOOGLE_SCRIPT_URL, JSON.stringify(body), {
+                    headers: { "Content-Type": "text/plain" },
+                    timeout: 30000 // กำหนด Timeout ป้องกันค้างรอไม่มีกำหนด
+                });
+                const res = response.data;
+                if (res && res.code === 401) {
+                    logout();
+                    Swal.fire('หมดเวลาเข้าสู่ระบบ', 'เซสชันของคุณหมดอายุ กรุณาเข้าสู่ระบบใหม่อีกครั้ง', 'warning');
+                    return null;
+                }
+                return res;
+            } catch (error) {
+                console.error("API Error:", error);
+                return { status: 'error', message: 'ไม่สามารถเชื่อมต่อเซิร์ฟเวอร์ได้ หรือใช้เวลานานเกินไป' };
+            }
+        };
+
+        const authAction = async () => {
+            Swal.fire({ title: 'กำลังตรวจสอบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const action = isLoginMode.value ? 'login' : 'register';
+            const res = await callSheet(action, authForm.value);
+
+            if (res && res.status === 'success') {
+                if (isLoginMode.value) {
+                    token.value = res.token;
+                    user.value = res.user;
+                    localStorage.setItem('ck_token', res.token);
+                    localStorage.setItem('ck_user', JSON.stringify(res.user));
+
+                    if (res.must_reset || authForm.value.password === '1') {
+                        Swal.close();
+                        forcePwForm.value = { old_password: authForm.value.password, new_password: '', confirm_password: '' };
+                        mustResetModal.value = true;
+                    } else {
+                        await fetchData(true);
+                        Swal.fire({ icon: 'success', title: 'เข้าสู่ระบบสำเร็จ', timer: 1000, showConfirmButton: false });
+                    }
+                } else {
+                    Swal.fire('ส่งคำขอลงทะเบียนสำเร็จ', 'กรุณารอแอดมินอนุมัติบัญชีของคุณก่อนเข้าใช้งาน', 'success');
+                    isLoginMode.value = true;
+                    authForm.value = { username: '', password: '', full_name: '', color: '', role: '' };
+                }
+            } else {
+                Swal.fire('ไม่สามารถทำรายการได้', res ? res.message : 'เกิดข้อผิดพลาด', 'error');
+            }
+        };
+
+        const submitForcedPasswordChange = async () => {
+            if (forcePwForm.value.new_password === '1' || forcePwForm.value.new_password.length < 6) {
+                Swal.fire('รหัสผ่านไม่ปลอดภัย', 'รหัสผ่านใหม่ต้องมีอย่างน้อย 6 ตัวอักษร และต้องไม่ใช่เลข 1', 'warning');
+                return;
+            }
+            if (forcePwForm.value.new_password !== forcePwForm.value.confirm_password) {
+                Swal.fire('รหัสผ่านไม่ตรงกัน', 'กรุณายืนยันรหัสผ่านใหม่ให้ตรงกันทั้ง 2 ช่อง', 'warning');
+                return;
+            }
+            Swal.fire({ title: 'กำลังบันทึกรหัสผ่านใหม่...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const res = await callSheet('changePassword', {
+                old_password: forcePwForm.value.old_password,
+                new_password: forcePwForm.value.new_password
+            });
+            if (res && res.status === 'success') {
+                mustResetModal.value = false;
+                authForm.value.password = '';
+                await fetchData(true);
+                Swal.fire('เปลี่ยนรหัสผ่านสำเร็จ', 'ระบบได้บันทึกรหัสผ่านใหม่เรียบร้อยแล้ว', 'success');
+            } else {
+                Swal.fire('ผิดพลาด', res ? res.message : 'เปลี่ยนรหัสผ่านไม่สำเร็จ', 'error');
+            }
+        };
+
+        // ================= ASYNC FAST FETCH (แยกโหลดข้อมูลป้องกันค้าง) =================
+        const fetchData = async (showLoading = false) => {
+            if (!token.value) return;
+            if (showLoading) Swal.fire({ title: 'กำลังโหลดข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                // โหลดรายชื่อสมาชิกก่อนเป็นลำดับแรก (ข้อมูลหลัก)
+                const resM = await callSheet('getMembers');
+                if (Array.isArray(resM)) {
+                    members.value = resM.map(m => {
+                        const dept = (m.department || '').trim();
+                        let col = cleanStr(m.color);
+                        if (colorMap[col]) col = colorMap[col];
+                        if (!col || !departments[col]) col = getDeptColor(dept);
+                        return {
+                            ...m,
+                            department: dept,
+                            color: col,
+                            level: normalizeLevel(m.level),
+                            room: m.room ? String(m.room).trim() : '-',
+                            shirt_size: (m.shirt_size || 'M').toString().toUpperCase().trim(),
+                            is_paid: m.is_paid === true || String(m.is_paid).toLowerCase() === 'true',
+                            is_received: m.is_received === true || String(m.is_received).toLowerCase() === 'true'
+                        };
+                    });
+                }
+
+                // โหลดข้อมูลงบประมาณเฉพาะผู้มีสิทธิ์ (แยกเรียกทีหลังเพื่อไม่ให้บล็อกการแสดงผลหน้าแรก)
+                if (canAccessBudget.value) {
+                    callSheet('getBudget').then(resB => {
+                        if (Array.isArray(resB)) budgetList.value = resB;
+                    });
+                }
+            } catch (err) {
+                console.error("Fetch error:", err);
+            } finally {
+                if (showLoading) Swal.close();
+            }
+        };
+
+        const currentUserRole = computed(() => cleanStr(user.value.role));
+        const canEditMembers = computed(() => ['admin', 'president', 'vice', 'staff'].includes(currentUserRole.value));
+        const canDeleteMembers = computed(() => ['admin', 'president', 'vice'].includes(currentUserRole.value));
+        const canAccessBudget = computed(() => ['admin', 'treasurer', 'president', 'vice'].includes(currentUserRole.value));
+        const canManageBudget = computed(() => ['admin', 'treasurer'].includes(currentUserRole.value));
+
+        const currentDepartmentOptions = computed(() => {
+            const col = user.value.role === 'admin' ? memberForm.value.target_color : user.value.color;
+            return getDeptsByColor(cleanStr(col));
+        });
+
+        const uniqueDepartments = computed(() => {
+            const baseList = user.value.role === 'admin' && adminFilterColor.value !== 'all'
+                ? members.value.filter(m => m.color === adminFilterColor.value)
+                : members.value;
+            return [...new Set(baseList.map(m => m.department).filter(Boolean))].sort((a, b) => a.localeCompare(b, 'th'));
+        });
+
+        const getLast3Digits = (sid) => {
+            if (!sid) return 9999;
+            const digits = String(sid).replace(/\D/g, '');
+            if (!digits) return 9999;
+            return parseInt(digits.slice(-3), 10);
+        };
+
+        // Cache และ Memoize การกรองข้อมูลเพื่อลดการประมวลผลซ้ำซ้อน
+        const filteredMembers = computed(() => {
+            let list = members.value;
+
+            if (user.value.role === 'admin' && adminFilterColor.value !== 'all') {
+                list = list.filter(m => m.color === adminFilterColor.value);
+            } else if (user.value.role !== 'admin') {
+                list = list.filter(m => m.color === cleanStr(user.value.color));
+            }
+
+            if (levelFilter.value !== 'all') {
+                list = list.filter(m => normalizeLevel(m.level) === levelFilter.value);
+            }
+            if (departmentFilter.value !== 'all') {
+                list = list.filter(m => m.department === departmentFilter.value);
+            }
+            if (searchQuery.value) {
+                const q = searchQuery.value.toLowerCase();
+                list = list.filter(m =>
+                    (m.name && m.name.toLowerCase().includes(q)) ||
+                    (m.student_id && String(m.student_id).toLowerCase().includes(q)) ||
+                    (m.shirt_size && m.shirt_size.toLowerCase() === q)
+                );
+            }
+
+            // Copy อาเรย์ก่อนซอร์ต ป้องกันผลกระทบทางอ้อม
+            return [...list].sort((a, b) => {
+                if (a.department !== b.department) return String(a.department).localeCompare(String(b.department), 'th');
+                if (a.level !== b.level) return String(a.level).localeCompare(String(b.level), 'th');
+                const rA = parseInt(a.room, 10) || 99;
+                const rB = parseInt(b.room, 10) || 99;
+                if (rA !== rB) return rA - rB;
+                return getLast3Digits(a.student_id) - getLast3Digits(b.student_id);
+            });
+        });
+
+        const groupedMembers = computed(() => {
+            const groups = {};
+            filteredMembers.value.forEach(m => {
+                const dept = m.department || 'ไม่ระบุแผนก';
+                const lvl = normalizeLevel(m.level);
+                const roomKey = lvl === 'คณะครู/บุคลากร' ? 'คณะครูและบุคลากร' : `${lvl} ห้อง ${m.room || '1'}`;
+                if (!groups[dept]) groups[dept] = {};
+                if (!groups[dept][roomKey]) groups[dept][roomKey] = [];
+                groups[dept][roomKey].push(m);
+            });
+            return groups;
+        });
+
+        const paidCount = computed(() => filteredMembers.value.filter(m => m.is_paid).length);
+        const receivedCount = computed(() => filteredMembers.value.filter(m => m.is_received).length);
+
+        // ================= FAST EXCEL IMPORT (Chunk Processing) =================
+        const excelWorkbook = ref(null);
+        const excelSheetNames = ref([]);
+        const selectedSheets = ref([]);
+        const importRows = ref([]);
+        const extraExcelHeaders = ref([]);
+        const importDefaults = ref({
+            color: user.value.role === 'admin' ? 'blue' : (user.value.color || 'blue'),
+            department: 'ช่างก่อสร้าง',
+            level: 'ปวช. 1',
+            room: '1'
+        });
+
+        const detectSizeFromRow = (rowObj) => {
+            for (const [k, v] of Object.entries(rowObj)) {
+                const keyUpper = String(k).trim().toUpperCase();
+                const valUpper = String(v).trim().toUpperCase();
+                if (shirtSizes.includes(valUpper)) return valUpper;
+                if (shirtSizes.includes(keyUpper) && (v === 1 || v === '1' || v === true || v === '/' || v === '✓' || v === 'x' || v === 'X')) {
+                    return keyUpper;
+                }
+            }
+            return 'M';
+        };
+
+        const detectDeptAndColor = (text) => {
+            if (!text) return null;
+            const s = String(text);
+            for (const [col, deptList] of Object.entries(departments)) {
+                for (const d of deptList) {
+                    if (d !== 'คณะครู/บุคลากร' && s.includes(d)) {
+                        return { color: col, department: d };
+                    }
+                }
+            }
+            return null;
+        };
+
+        const parseSelectedExcelSheets = () => {
+            if (!excelWorkbook.value) return;
+            const extracted = [];
+            const extraCols = new Set();
+
+            selectedSheets.value.forEach(sheetName => {
+                const sheet = excelWorkbook.value.Sheets[sheetName];
+                if (!sheet) return;
+
+                const rows2D = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: '' });
+                let currentHeaders = [];
+                let sheetContext = detectDeptAndColor(sheetName);
+
+                for (let r = 0; r < rows2D.length; r++) {
+                    const row = rows2D[r].map(c => String(c || '').trim());
+                    const nonEmpty = row.filter(Boolean);
+                    if (nonEmpty.length === 0) continue;
+
+                    const joinedRow = nonEmpty.join(' ');
+                    const foundContext = detectDeptAndColor(joinedRow);
+                    if (foundContext) sheetContext = foundContext;
+
+                    const isHeader = row.some(cell => /ชื่อ|สกุล|รหัส|ไซส์|ไซต์|ขนาด|name|size|student/i.test(cell));
+                    if (isHeader && nonEmpty.length >= 2) {
+                        currentHeaders = row.map((h, idx) => h || `คอลัมน์_${idx + 1}`);
+                        continue;
+                    }
+
+                    const rowObj = {};
+                    row.forEach((val, idx) => {
+                        const hName = currentHeaders[idx] || `คอลัมน์_${idx + 1}`;
+                        rowObj[hName] = val;
+                    });
+
+                    let sid = '';
+                    let firstName = '';
+                    let lastName = '';
+                    let fullName = '';
+                    let level = '';
+                    let room = '';
+                    let size = '';
+                    let dept = sheetContext ? sheetContext.department : '';
+                    let col = sheetContext ? sheetContext.color : importDefaults.value.color;
+
+                    for (const [k, v] of Object.entries(rowObj)) {
+                        if (!v) continue;
+                        const cleanKey = k.toLowerCase();
+                        const cleanVal = String(v).trim();
+
+                        if (/^\d{10,11}$/.test(cleanVal.replace(/\D/g, '')) && !sid) {
+                            sid = cleanVal.replace(/\D/g, '').slice(0, 11);
+                        } else if (/รหัส|id|code/.test(cleanKey) && /\d{5,}/.test(cleanVal)) {
+                            sid = cleanVal.replace(/\D/g, '').slice(0, 11);
+                        } else if (/ชื่อ-สกุล|ชื่อ-นามสกุล|ชื่อสกุล|fullname|name/.test(cleanKey)) {
+                            fullName = cleanVal;
+                        } else if (/^ชื่อ$|^ชื่อตัว|firstname/.test(cleanKey)) {
+                            firstName = cleanVal;
+                        } else if (/สกุล|lastname/.test(cleanKey)) {
+                            lastName = cleanVal;
+                        } else if (/ไซต์|ไซส์|ขนาด|size/.test(cleanKey) && shirtSizes.includes(cleanVal.toUpperCase())) {
+                            size = cleanVal.toUpperCase();
+                        } else if (/ชั้น|ระดับ|level/.test(cleanKey)) {
+                            level = normalizeLevel(cleanVal);
+                        } else if (/ห้อง|room/.test(cleanKey)) {
+                            room = cleanVal.replace(/\D/g, '') || '-';
+                        } else if (/แผนก|สาขา|dept|department/.test(cleanKey)) {
+                            const dc = detectDeptAndColor(cleanVal);
+                            if (dc) { dept = dc.department; col = dc.color; }
+                        } else {
+                            extraCols.add(k);
+                        }
+                    }
+
+                    if (!fullName && (firstName || lastName)) {
+                        fullName = `${firstName} ${lastName}`.trim();
+                    }
+                    if (!fullName) {
+                        const possibleName = nonEmpty.find(c =>
+                            !/^\d+$/.test(c) &&
+                            !shirtSizes.includes(c.toUpperCase()) &&
+                            c.length >= 4 &&
+                            /[ก-๙a-zA-Z]/.test(c) &&
+                            !/ลำดับ|หมายเหตุ|รวม|สรุป/.test(c)
+                        );
+                        if (possibleName) fullName = possibleName;
+                    }
+
+                    if (!fullName || /รวมทั้งสิ้น|สรุปยอด|ลงชื่อ|อาจารย์ที่ปรึกษา/.test(fullName)) continue;
+
+                    fullName = fullName.replace(/^\d+[\.\)\s]+/, '').trim();
+                    if (!size) size = detectSizeFromRow(rowObj);
+                    if (!dept) dept = getDeptsByColor(col)[0];
+
+                    extracted.push({
+                        _sheet: sheetName,
+                        student_id: sid,
+                        name: sanitizeInput(fullName),
+                        color: user.value.role === 'admin' ? col : cleanStr(user.value.color),
+                        department: dept,
+                        level: level || importDefaults.value.level,
+                        room: room || importDefaults.value.room,
+                        shirt_size: shirtSizes.includes(size) ? size : 'M',
+                        is_paid: false,
+                        is_received: false
+                    });
+                }
+            });
+
+            extraExcelHeaders.value = [...extraCols].slice(0, 12);
+            importRows.value = extracted;
+        };
+
+        const handleExcelUpload = (e) => {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const defaultCol = user.value.role === 'admin' ? 'blue' : cleanStr(user.value.color);
+            importDefaults.value.color = defaultCol;
+            importDefaults.value.department = getDeptsByColor(defaultCol)[0];
+
+            Swal.fire({ title: 'กำลังอ่านไฟล์ Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            const reader = new FileReader();
+            reader.onload = (evt) => {
+                try {
+                    const data = new Uint8Array(evt.target.result);
+                    const wb = XLSX.read(data, { type: 'array' });
+                    excelWorkbook.value = wb;
+                    excelSheetNames.value = wb.SheetNames;
+                    selectedSheets.value = [...wb.SheetNames];
+                    parseSelectedExcelSheets();
+                    Swal.close();
+                    showImportModal.value = true;
+                } catch (err) {
+                    Swal.fire('ข้อผิดพลาด', 'ไม่สามารถอ่านไฟล์ Excel นี้ได้', 'error');
+                }
+                e.target.value = '';
+            };
+            reader.readAsArrayBuffer(file);
+        };
+
+        const toggleSheetSelection = (sh) => {
+            const idx = selectedSheets.value.indexOf(sh);
+            if (idx >= 0 && selectedSheets.value.length > 1) {
+                selectedSheets.value.splice(idx, 1);
+            } else if (idx < 0) {
+                selectedSheets.value.push(sh);
+            }
+            parseSelectedExcelSheets();
+        };
+
+        const applyImportDefaults = () => {
+            const depts = getDeptsByColor(importDefaults.value.color);
+            if (!depts.includes(importDefaults.value.department)) {
+                importDefaults.value.department = depts[0];
+            }
+            importRows.value.forEach(r => {
+                r.color = importDefaults.value.color;
+                r.department = importDefaults.value.department;
+                r.level = importDefaults.value.level;
+                r.room = importDefaults.value.room;
+            });
+        };
+
+        const onRowColorChange = (row) => {
+            const depts = getDeptsByColor(row.color);
+            if (!depts.includes(row.department)) row.department = depts[0];
+        };
+
+        const addBlankImportRow = () => {
+            importRows.value.push({
+                _sheet: 'เพิ่มด้วยตนเอง',
+                student_id: '',
+                name: '',
+                color: importDefaults.value.color,
+                department: importDefaults.value.department,
+                level: importDefaults.value.level,
+                room: importDefaults.value.room,
+                shirt_size: 'M',
+                is_paid: false,
+                is_received: false
+            });
+        };
+
+        const confirmSaveImport = async () => {
+            const validRows = importRows.value.filter(r => r.name && r.name.trim().length >= 2);
+            if (validRows.length === 0) {
+                Swal.fire('แจ้งเตือน', 'ไม่มีรายการที่มีชื่อ-นามสกุลถูกต้อง', 'warning');
+                return;
+            }
+
+            Swal.fire({
+                title: `กำลังนำเข้าข้อมูล 0 / ${validRows.length}`,
+                text: 'กรุณาอย่าปิดหน้าต่างนี้...',
+                allowOutsideClick: false,
+                didOpen: () => Swal.showLoading()
+            });
+
+            let successCount = 0;
+            // ส่งทีละรายการแบบวนลูปพร้อมอัปเดตสถานะทีละสเต็ป ป้องกัน Timeout ของ Apps Script
+            for (let i = 0; i < validRows.length; i++) {
+                const r = validRows[i];
+                Swal.update({ title: `กำลังนำเข้าข้อมูล ${i + 1} / ${validRows.length}` });
+                const res = await callSheet('saveMember', {
+                    name: sanitizeInput(r.name),
+                    student_id: sanitizeInput(r.student_id),
+                    level: r.level,
+                    room: r.room || '-',
+                    shirt_size: r.shirt_size,
+                    color: r.color,
+                    department: r.department,
+                    is_paid: !!r.is_paid,
+                    is_received: !!r.is_received,
+                    member_type: r.department === 'คณะครู/บุคลากร' ? 'staff' : 'student'
+                });
+                if (res && res.status === 'success') successCount++;
+            }
+
+            showImportModal.value = false;
+            await fetchData(false);
+            Swal.fire('นำเข้าข้อมูลสำเร็จ!', `บันทึกข้อมูลเข้าสู่ระบบเรียบร้อยแล้ว ${successCount} รายการ`, 'success');
+        };
+
+        const onMemberFormColorChange = () => {
+            const opts = currentDepartmentOptions.value;
+            if (!opts.includes(memberForm.value.department)) {
+                memberForm.value.department = opts[0] || '';
+            }
+        };
+
+        const openAddMember = () => {
+            const defaultColor = user.value.role === 'admin'
+                ? (adminFilterColor.value !== 'all' ? adminFilterColor.value : 'blue')
+                : cleanStr(user.value.color);
+            const firstDept = getDeptsByColor(defaultColor)[0];
+            memberForm.value = {
+                id: null, name: '', student_id: '', level: 'ปวช. 1', room: '1',
+                shirt_size: 'M', target_color: defaultColor, department: firstDept,
+                is_paid: false, is_received: false
+            };
+            showAddMemberModal.value = true;
+        };
+
+        const openEditMember = (m) => {
+            memberForm.value = {
+                ...m,
+                target_color: m.color,
+                level: normalizeLevel(m.level),
+                is_paid: !!m.is_paid,
+                is_received: !!m.is_received
+            };
+            showAddMemberModal.value = true;
+        };
+
+        const saveMember = async () => {
+            Swal.fire({ title: 'กำลังบันทึกข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const payload = {
+                ...memberForm.value,
+                name: sanitizeInput(memberForm.value.name),
+                student_id: sanitizeInput(memberForm.value.student_id),
+                color: user.value.role === 'admin' ? memberForm.value.target_color : cleanStr(user.value.color)
+            };
+            const res = await callSheet('saveMember', payload);
+            if (res && res.status === 'success') {
+                showAddMemberModal.value = false;
+                await fetchData(false);
+                Swal.fire({ icon: 'success', title: 'บันทึกสำเร็จ', timer: 1000, showConfirmButton: false });
+            } else {
+                Swal.fire('ผิดพลาด', res ? res.message : 'ไม่สามารถบันทึกข้อมูลได้', 'error');
+            }
+        };
+
+        const quickToggleStatus = async (member, field) => {
+            const updatedVal = !member[field];
+            member[field] = updatedVal;
+            const res = await callSheet('saveMember', { ...member, [field]: updatedVal });
+            if (!res || res.status !== 'success') {
+                member[field] = !updatedVal;
+                Swal.fire('ผิดพลาด', res ? res.message : 'อัปเดตสถานะไม่สำเร็จ', 'error');
+            }
+        };
+
+        const deleteMember = async (id) => {
+            const { value: password } = await Swal.fire({
+                title: 'ยืนยันรหัสผ่านเพื่อลบรายชื่อ',
+                input: 'password',
+                inputPlaceholder: 'กรอกรหัสผ่านของคุณ',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'ยืนยันลบ',
+                cancelButtonText: 'ยกเลิก'
+            });
+            if (!password) return;
+
+            Swal.fire({ title: 'กำลังลบข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const res = await callSheet('deleteMember', { id, confirm_password: password });
+            if (res && res.status === 'success') {
+                await fetchData(false);
+                Swal.fire('ลบสำเร็จ', 'ลบรายชื่อออกจากระบบแล้ว', 'success');
+            } else {
+                Swal.fire('ลบไม่สำเร็จ', res ? res.message : 'รหัสผ่านไม่ถูกต้อง', 'error');
+            }
+        };
+
+        const deleteDepartmentMembers = async (deptName) => {
+            const targets = filteredMembers.value.filter(m => m.department === deptName);
+            if (targets.length === 0) return;
+
+            const { value: password } = await Swal.fire({
+                title: `ลบแผนก ${deptName} (${targets.length} คน)?`,
+                text: 'กรอกรหัสผ่าน Admin เพื่อยืนยันการลบทั้งหมด',
+                input: 'password',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'ลบทั้งหมด'
+            });
+            if (!password) return;
+
+            Swal.fire({ title: 'กำลังลบข้อมูล...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            for (const m of targets) {
+                await callSheet('deleteMember', { id: m.id, confirm_password: password });
+            }
+            await fetchData(false);
+            Swal.fire('สำเร็จ', `ลบข้อมูลแผนก ${deptName} เรียบร้อยแล้ว`, 'success');
+        };
+
+        const confirmBulkPay = async (targetMembers, isChecked) => {
+            if (!isChecked) return;
+            const toPay = targetMembers.filter(m => !m.is_paid);
+            if (toPay.length === 0) {
+                Swal.fire('แจ้งเตือน', 'สมาชิกทุกคนในกลุ่มนี้ชำระเงินครบแล้ว', 'info');
+                return;
+            }
+            const ok = await Swal.fire({
+                title: `ยืนยันชำระเงินครบ ${toPay.length} คน?`,
+                icon: 'question',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยัน',
+                cancelButtonText: 'ยกเลิก'
+            });
+            if (!ok.isConfirmed) return;
+
+            Swal.fire({ title: 'กำลังอัปเดตสถานะ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            for (const m of toPay) {
+                await callSheet('saveMember', { ...m, is_paid: true });
+            }
+            await fetchData(false);
+            Swal.fire('สำเร็จ', `อัปเดตสถานะจ่ายเงินแล้ว ${toPay.length} คน`, 'success');
+        };
+
+        const confirmBulkPayObj = (roomsObj, isChecked) => {
+            confirmBulkPay(Object.values(roomsObj).flat(), isChecked);
+        };
+
+        const totalIncome = computed(() => budgetList.value.filter(b => b.type === 'income').reduce((s, b) => s + Number(b.amount || 0), 0));
+        const totalExpense = computed(() => budgetList.value.filter(b => b.type === 'expense').reduce((s, b) => s + Number(b.amount || 0), 0));
+
+        const openTransactionModal = (mode, data = null) => {
+            transactionMode.value = mode;
+            const defaultCol = user.value.role === 'admin' ? 'blue' : cleanStr(user.value.color);
+            transactionForm.value = { id: null, description: '', amount: '', type: 'expense', color: defaultCol, confirm_password: '' };
+            if (mode === 'edit' && data) {
+                transactionForm.value = { ...data, confirm_password: '' };
+            } else if (mode === 'set_balance') {
+                transactionForm.value.description = 'ยอดยกมา (งบประมาณเริ่มต้น)';
+                transactionForm.value.type = 'income';
+            }
+            showTransactionModal.value = true;
+        };
+
+        const saveTransaction = async () => {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const res = await callSheet('saveTransaction', transactionForm.value);
+            if (res && res.status === 'success') {
+                showTransactionModal.value = false;
+                await fetchData(false);
+                Swal.fire('สำเร็จ', 'บันทึกรายการงบประมาณแล้ว', 'success');
+            } else {
+                Swal.fire('ผิดพลาด', res ? res.message : 'ไม่สามารถบันทึกได้', 'error');
+            }
+        };
+
+        const deleteTransaction = async (id) => {
+            const { value: password } = await Swal.fire({
+                title: 'ยืนยันรหัสผ่านเพื่อลบรายการงบประมาณ',
+                input: 'password',
+                showCancelButton: true,
+                confirmButtonColor: '#e11d48',
+                confirmButtonText: 'ยืนยันลบ'
+            });
+            if (!password) return;
+            Swal.fire({ title: 'กำลังลบ...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const res = await callSheet('deleteTransaction', { id, confirm_password: password });
+            if (res && res.status === 'success') {
+                await fetchData(false);
+                Swal.fire('สำเร็จ', 'ลบรายการแล้ว', 'success');
+            } else {
+                Swal.fire('ผิดพลาด', res ? res.message : 'ลบไม่สำเร็จ', 'error');
+            }
+        };
+
+        const loadUsers = async () => {
+            currentTab.value = 'users';
+            Swal.fire({ title: 'กำลังโหลดรายชื่อผู้ใช้...', didOpen: () => Swal.showLoading() });
+            const res = await callSheet('getUsers');
+            Swal.close();
+            if (Array.isArray(res)) userList.value = res;
+        };
+
+        const approveUser = async (u) => {
+            Swal.fire({ title: 'กำลังอนุมัติ...', didOpen: () => Swal.showLoading() });
+            const res = await callSheet('approveUser', { id: u.id });
+            if (res && res.status === 'success') {
+                await loadUsers();
+                Swal.fire('อนุมัติสำเร็จ', `อนุมัติบัญชี ${u.username} เรียบร้อยแล้ว`, 'success');
+            }
+        };
+
+        const resetPasswordToDefault = async (u) => {
+            const confirm = await Swal.fire({
+                title: `รีเซ็ตรหัสผ่านของ "${u.username}"?`,
+                html: 'รหัสผ่านจะถูกรีเซ็ตกลับเป็นค่าเริ่มต้นคือ <b class="text-rose-600 text-lg">1</b>',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonText: 'ยืนยันรีเซ็ตเป็น 1',
+                cancelButtonText: 'ยกเลิก'
+            });
+            if (!confirm.isConfirmed) return;
+
+            Swal.fire({ title: 'กำลังรีเซ็ตรหัสผ่าน...', didOpen: () => Swal.showLoading() });
+            const res = await callSheet('adminResetPassword', { id: u.id });
+            if (res && res.status === 'success') {
+                Swal.fire('รีเซ็ตสำเร็จ!', `รหัสผ่านของ ${u.username} ถูกรีเซ็ตเป็น "1" เรียบร้อยแล้ว`, 'success');
+            } else {
+                Swal.fire('ผิดพลาด', res ? res.message : 'ไม่สามารถรีเซ็ตได้', 'error');
+            }
+        };
+
+        const openEditProfile = () => {
+            profileForm.value = { full_name: user.value.full_name || '', old_password: '', new_password: '' };
+            showEditProfileModal.value = true;
+            showProfileMenu.value = false;
+        };
+
+        const updateProfile = async () => {
+            Swal.fire({ title: 'กำลังบันทึก...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            if (profileForm.value.full_name) {
+                await callSheet('updateProfile', { full_name: sanitizeInput(profileForm.value.full_name) });
+                user.value.full_name = sanitizeInput(profileForm.value.full_name);
+                localStorage.setItem('ck_user', JSON.stringify(user.value));
+            }
+            if (profileForm.value.new_password) {
+                const pwRes = await callSheet('changePassword', {
+                    old_password: profileForm.value.old_password,
+                    new_password: profileForm.value.new_password
+                });
+                if (!pwRes || pwRes.status !== 'success') {
+                    Swal.fire('เปลี่ยนรหัสผ่านไม่สำเร็จ', pwRes ? pwRes.message : 'รหัสผ่านเดิมไม่ถูกต้อง', 'error');
+                    return;
+                }
+            }
+            showEditProfileModal.value = false;
+            Swal.fire('สำเร็จ', 'อัปเดตข้อมูลส่วนตัวเรียบร้อยแล้ว', 'success');
+        };
+
+        const logout = () => {
+            token.value = '';
+            user.value = {};
+            localStorage.removeItem('ck_token');
+            localStorage.removeItem('ck_user');
+        };
+
+        const confirmLogout = () => {
+            showProfileMenu.value = false;
+            Swal.fire({ title: 'ต้องการออกจากระบบ?', icon: 'question', showCancelButton: true, confirmButtonText: 'ออกจากระบบ', cancelButtonText: 'ยกเลิก' })
+                .then(r => { if (r.isConfirmed) logout(); });
+        };
+
+        const getRoomSizeSummary = (roomMembers) => {
+            const sum = {};
+            roomMembers.forEach(m => {
+                const s = m.shirt_size || 'M';
+                sum[s] = (sum[s] || 0) + 1;
+            });
+            return sum;
+        };
+
+        const getAllSizeSummary = () => {
+            const sum = {};
+            filteredMembers.value.forEach(m => {
+                const s = m.shirt_size || 'M';
+                sum[s] = (sum[s] || 0) + 1;
+            });
+            return sum;
+        };
+
+        const generateSummary = () => {
+            const allSizes = getAllSizeSummary();
+            let html = `<div class="text-left text-xs sm:text-sm space-y-4 max-h-[68vh] overflow-y-auto pr-1">`;
+            html += `<div class="bg-purple-50 border border-purple-200 p-3.5 rounded-2xl">`;
+            html += `<div class="font-bold text-purple-900 mb-2">👕 สรุปยอดรวมทุกไซต์เสื้อ (รวมทั้งสิ้น ${filteredMembers.value.length} ตัว)</div>`;
+            html += `<div class="grid grid-cols-5 gap-2 text-center">`;
+            shirtSizes.forEach(sz => {
+                html += `<div class="bg-white p-2 rounded-xl border border-purple-100"><div class="text-[11px] text-slate-500">${sz}</div><div class="font-bold text-base text-purple-700">${allSizes[sz] || 0}</div></div>`;
+            });
+            html += `</div></div>`;
+
+            for (const [dept, rooms] of Object.entries(groupedMembers.value)) {
+                html += `<div class="border border-slate-200 rounded-2xl overflow-hidden">`;
+                html += `<div class="bg-slate-800 text-white px-3.5 py-2 font-bold flex justify-between"><span>🏢 ${dept}</span><span>${Object.values(rooms).flat().length} คน</span></div>`;
+                html += `<div class="overflow-x-auto"><table class="w-full text-center border-collapse text-xs">`;
+                html += `<thead class="bg-slate-100"><tr><th class="border p-1.5 text-left">ห้อง</th>`;
+                shirtSizes.forEach(sz => { html += `<th class="border p-1.5">${sz}</th>`; });
+                html += `<th class="border p-1.5 bg-purple-50 font-bold">รวม</th></tr></thead><tbody>`;
+
+                for (const [roomName, rMembers] of Object.entries(rooms)) {
+                    const rSum = getRoomSizeSummary(rMembers);
+                    html += `<tr><td class="border p-1.5 text-left font-semibold whitespace-nowrap">${roomName}</td>`;
+                    shirtSizes.forEach(sz => {
+                        html += `<td class="border p-1.5 ${rSum[sz] ? 'font-bold text-slate-800' : 'text-slate-300'}">${rSum[sz] || 0}</td>`;
+                    });
+                    html += `<td class="border p-1.5 bg-purple-50 font-bold text-purple-700">${rMembers.length}</td></tr>`;
+                }
+                html += `</tbody></table></div></div>`;
+            }
+            html += `</div>`;
+
+            Swal.fire({ title: '📊 สรุปยอดไซต์เสื้อแยกตามแผนกและห้อง', html, width: '850px', confirmButtonText: 'ปิดหน้าต่าง' });
+        };
+
+        const exportPDF = () => {
+            if (filteredMembers.value.length === 0) {
+                Swal.fire('ไม่มีข้อมูล', 'ไม่พบรายชื่อสมาชิกสำหรับสร้างไฟล์ PDF', 'warning');
+                return;
+            }
+            Swal.fire({ title: 'กำลังจัดหน้ากระดาษ PDF...', text: 'แยกตามห้องและเรียงรหัส 3 ตัวท้าย', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            setTimeout(() => {
+                const element = document.getElementById('pdf-container');
+                element.style.display = 'block';
+                const opt = {
+                    margin: 0,
+                    filename: `Chongkho_Shirts_${new Date().toISOString().slice(0, 10)}.pdf`,
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+                html2pdf().set(opt).from(element).save().then(() => {
+                    element.style.display = 'none';
+                    Swal.close();
+                }).catch(err => {
+                    console.error(err);
+                    element.style.display = 'none';
+                    Swal.fire('ผิดพลาด', 'ไม่สามารถสร้างไฟล์ PDF ได้', 'error');
+                });
+            }, 300);
+        };
+
+        const getColorName = (c) => ({ blue: 'สีน้ำเงิน', green: 'สีเขียว', purple: 'สีม่วง', orange: 'สีแสด', admin: 'ส่วนกลาง' }[cleanStr(c)] || c);
+        const getRoleName = (r) => ({ president: 'ประธานสี', vice: 'รองประธานสี', treasurer: 'เหรัญญิก', staff: 'Staff', admin: 'ผู้ดูแลระบบ (Admin)' }[cleanStr(r)] || r);
+        const getBadgeClass = (c) => ({ blue: 'badge-blue', green: 'badge-green', purple: 'badge-purple', orange: 'badge-orange', admin: 'badge-admin' }[cleanStr(c)] || 'badge-purple');
+        const formatCurrency = (val) => new Intl.NumberFormat('th-TH', { style: 'currency', currency: 'THB' }).format(val || 0);
+
+        onMounted(() => {
+            if (token.value) fetchData(true);
+        });
+
+        return {
+            token, user, isLoginMode, showPassword, currentTab,
+            showAddMemberModal, showTransactionModal, showEditProfileModal, showProfileMenu, mustResetModal, showImportModal,
+            transactionMode, members, budgetList, userList,
+            levelFilter, adminFilterColor, departmentFilter, searchQuery,
+            authForm, forcePwForm, memberForm, transactionForm, profileForm,
+            levels, shirtSizes, uniqueDepartments, currentDepartmentOptions,
+            filteredMembers, groupedMembers, paidCount, receivedCount,
+            canEditMembers, canDeleteMembers, canAccessBudget, canManageBudget,
+            totalIncome, totalExpense,
+            authAction, submitForcedPasswordChange, fetchData,
+            onMemberFormColorChange, openAddMember, openEditMember, saveMember, quickToggleStatus, deleteMember, deleteDepartmentMembers,
+            confirmBulkPay, confirmBulkPayObj,
+            openTransactionModal, saveTransaction, deleteTransaction,
+            loadUsers, approveUser, resetPasswordToDefault,
+            openEditProfile, updateProfile, confirmLogout,
+            getRoomSizeSummary, getAllSizeSummary, generateSummary, exportPDF,
+            getColorName, getRoleName, getBadgeClass, getDeptColor, getDeptsByColor, formatCurrency,
+            excelSheetNames, selectedSheets, importRows, extraExcelHeaders, importDefaults,
+            handleExcelUpload, toggleSheetSelection, applyImportDefaults, onRowColorChange, addBlankImportRow, confirmSaveImport
+        };
+    }
+}).mount('#app');
+</script>
+</body>
+</html>
